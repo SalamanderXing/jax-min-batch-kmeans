@@ -26,7 +26,7 @@ def main():
    )
    mini_batch_kmeans.fit()
 
-   print(f"{mini_batch_kmeans.centroids}")
+   print(f"{mini_batch_kmeans.centroids=}")
 ```
 
 ## References
