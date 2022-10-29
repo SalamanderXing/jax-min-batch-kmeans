@@ -1,8 +1,14 @@
 # Mini-Batch KMeans written in JAX
 
-Just-in-time compiled implementation of the algorithm [Mini-Batch KMeans](https://doi.org/10.1145/1772690.1772862)[1]
+Just-in-time compiled ⚡implementation of [Mini-Batch KMeans](https://doi.org/10.1145/1772690.1772862)[1]
+
+## Requirements
+
+- [JAX 😎](https://github.com/google/jax) >= 0.3.17
+
 
 ## Installation
+
 ```bash
 git clone https://github.com/GiulioZani/jax-min-batch-kmeans
 
@@ -16,7 +22,7 @@ cd jax-mini-batch-kmeans
 from mini_batch_kmeans import MiniBatchKMeans
 
 def main():
-   xs = # some array of shape (number of samples, number of features)
+   xs = # a 2D array of shape (number of samples, number of features)
    mini_batch_kmeans = MiniBatchKMeans(
 	xs, # can be a numpy or jax array
 	k=4, # number of clusters

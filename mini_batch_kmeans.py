@@ -24,6 +24,7 @@ def update_centroids(vs, centroids, assigned_centroids, batch):
         centroids = centroids.at[c_index].add(lr * (batch[i] - centroids[c_index]))
     return centroids, vs
 
+
 def body_fun(i, vals):
     batch, assigned_centroids, centroids, vs = vals
     c_index = assigned_centroids[i]
@@ -32,10 +33,14 @@ def body_fun(i, vals):
     centroids = centroids.at[c_index].add(lr * (batch[i] - centroids[c_index]))
     return batch, assigned_centroids, centroids, vs
 
+
 def update_centroids_func(vs, centroids, assigned_centroids, batch):
     # while faster to compile, for some reason this performs worse than the for loop
-    _, _, centroids, vs = lax.fori_loop(0, batch.shape[0], body_fun, (batch, assigned_centroids, centroids, vs))
+    _, _, centroids, vs = lax.fori_loop(
+        0, batch.shape[0], body_fun, (batch, assigned_centroids, centroids, vs)
+    )
     return centroids, vs
+
 
 @jit
 def calculate_distance(feature_data, query_instance):
@@ -54,6 +59,7 @@ def assign_centroids(feature_data, centroids):
     )  # assign each instance to the closest centroid
     return assigned_centroids
 
+
 def update_centroids_vectorized(v, centroids, assigned_centroids, batch, k):
     # attepmt to vectorize the update centroids function, but it's much slower to converge
     tmp = assigned_centroids[None].repeat(k, axis=0)
@@ -64,7 +70,7 @@ def update_centroids_vectorized(v, centroids, assigned_centroids, batch, k):
     lrs = (1 / v).T.flatten()
     # filters lrs = inf
     lrs = jnp.where(lrs == jnp.inf, 0, lrs)
-    uba = assigned_centroids + jnp.arange(0, k*batch.shape[0], k)
+    uba = assigned_centroids + jnp.arange(0, k * batch.shape[0], k)
     correct_lrs = lrs[uba, None]
     # centroids = centroids + correct_lrs * (batch - centroids)
     counts = jnp.zeros(k, dtype=jnp.int32)
@@ -89,9 +95,10 @@ def update_centroids_vectorized(v, centroids, assigned_centroids, batch, k):
         .reshape(k, max_count)[:, :, None]
     )
     cuntroids = centroids[:, None]
-    centroids = ((1 - youla_lrs)*cuntroids  + youla_lrs*yolla).mean(axis=1) # (cuntroids + youla_lrs * (yolla - cuntroids)).sum(axis=1)
+    centroids = ((1 - youla_lrs) * cuntroids + youla_lrs * yolla).mean(
+        axis=1
+    )  # (cuntroids + youla_lrs * (yolla - cuntroids)).sum(axis=1)
     return centroids, v
-
 
 
 class MiniBatchKMeans:
@@ -102,16 +109,15 @@ class MiniBatchKMeans:
         *,
         batch_size: int = 1000,
         iter: int = 300,
-        tol: float = 1e-4,
         random_state: int = 0,
     ):
-        self.batch_size: int= batch_size
-        self.xs:jnp.DeviceArray = jnp.array(xs)
-        self.k:int = k
-        self.iter:int = iter
+        self.batch_size: int = batch_size
+        self.xs: jnp.DeviceArray = jnp.array(xs)
+        self.k: int = k
+        self.iter: int = iter
         self.tol = tol
-        self.rn_key:jnp.DeviceArray = jrn.PRNGKey(random_state)
-        self.centroids:Optional[DeviceArray] = None
+        self.rn_key: jnp.DeviceArray = jrn.PRNGKey(random_state)
+        self.centroids: Optional[DeviceArray] = None
 
     def fit(self):
         centroids = jrn.choice(self.rn_key, self.xs, shape=(self.k,))
@@ -124,17 +130,15 @@ class MiniBatchKMeans:
                 batch, assigned_centroids, centroids
             ).item()
             print(f"{distortion_cost=:.2f}")
-            # centroids, vs = update_centroids_weird(vs, centroids, assigned_centroids, batch, self.k) 
+            # centroids, vs = update_centroids_weird(vs, centroids, assigned_centroids, batch, self.k)
             centroids, vs = update_centroids(vs, centroids, assigned_centroids, batch)
-            #centroids, vs = update_centroids_func(vs, centroids, assigned_centroids, batch)
+            # centroids, vs = update_centroids_func(vs, centroids, assigned_centroids, batch)
         self.centroids = centroids
 
 
 def main():
     xs: jnp.DeviceArray = jnp.asarray(genfromtxt("clusteringData.csv", delimiter=","))
-    kmeans = MiniBatchKMeans(
-        xs, k=4, batch_size=1000, iter=1000, random_state=0
-    )
+    kmeans = MiniBatchKMeans(xs, k=4, batch_size=1000, iter=1000, random_state=0)
     kmeans.fit()
 
 
