@@ -1,19 +1,18 @@
-import jax.numpy as np
+import jax.numpy as jnp
+import numpy as np
 import jax.random as jrn
-from numpy import genfromtxt
-import ipdb
 from jax import jit
-import random
 from jax import lax
+
 
 @jit
 def get_distortion_cost(
-    feature_data: np.DeviceArray,
-    assigned_centroids: np.DeviceArray,
-    centroids: np.DeviceArray,
+    feature_data: jnp.DeviceArray,
+    assigned_centroids: jnp.DeviceArray,
+    centroids: jnp.DeviceArray,
 ):
     # we subtract, for each instance, the its closes centroid. Then we square the result and sum over all instances.
-    return np.sum((feature_data - centroids[assigned_centroids]) ** 2)
+    return jnp.sum((feature_data - centroids[assigned_centroids]) ** 2)
 
 
 @jit
@@ -40,17 +39,17 @@ def update_centroids_func(vs, centroids, assigned_centroids, batch):
 
 @jit
 def calculate_distance(feature_data, query_instance):
-    return np.sum(
-        np.abs(feature_data - query_instance), axis=1
+    return jnp.sum(
+        jnp.abs(feature_data - query_instance), axis=1
     )  # directly applies the formula for manhattan distance. axis=1 means sum over rows
 
 
 @jit
 def assign_centroids(feature_data, centroids):
-    distances = np.stack(
+    distances = jnp.stack(
         tuple(calculate_distance(feature_data, c) for c in centroids)
     )  # compute distances for each centroid with respect
-    assigned_centroids = np.argmin(
+    assigned_centroids = jnp.argmin(
         distances, axis=0
     )  # assign each instance to the closest centroid
     return assigned_centroids
@@ -58,34 +57,34 @@ def assign_centroids(feature_data, centroids):
 def update_centroids_vectorized(v, centroids, assigned_centroids, batch, k):
     # attepmt to vectorize the update centroids function, but it's much slower to converge
     tmp = assigned_centroids[None].repeat(k, axis=0)
-    arange = np.arange(k)[None].T
+    arange = jnp.arange(k)[None].T
     mask = tmp == arange
     current_v = mask.cumsum(axis=1)
     v = v + current_v
     lrs = (1 / v).T.flatten()
     # filters lrs = inf
-    lrs = np.where(lrs == np.inf, 0, lrs)
-    uba = assigned_centroids + np.arange(0, k*batch.shape[0], k)
+    lrs = jnp.where(lrs == jnp.inf, 0, lrs)
+    uba = assigned_centroids + jnp.arange(0, k*batch.shape[0], k)
     correct_lrs = lrs[uba, None]
     # centroids = centroids + correct_lrs * (batch - centroids)
-    counts = np.zeros(k, dtype=np.int32)
-    vals, cs = np.unique(np.sort(assigned_centroids), return_counts=True)
+    counts = jnp.zeros(k, dtype=jnp.int32)
+    vals, cs = jnp.unique(jnp.sort(assigned_centroids), return_counts=True)
     counts = counts.at[vals].set(cs)
-    max_count = np.max(counts)
+    max_count = jnp.max(counts)
     to_add = max_count - counts
-    tot_to_add = np.sum(to_add)
-    empty = np.arange(max_count)[None].repeat(k, 0)
+    tot_to_add = jnp.sum(to_add)
+    empty = jnp.arange(max_count)[None].repeat(k, 0)
     mask2 = (empty < to_add[:, None]).astype(int)
     # allaccio = mask2.at[mask2 > 0].set(np.arange(1, k + 1)[:, None]).flatten()
-    allaccio = (mask2 * np.arange(1, k + 1)[:, None]).flatten()
+    allaccio = (mask2 * jnp.arange(1, k + 1)[:, None]).flatten()
     alloccio = allaccio[allaccio > 0] - 1
-    assigned_centroids_ciao = np.concatenate([assigned_centroids, alloccio])
-    toll = np.zeros((tot_to_add, batch.shape[1]))
-    batch_ciao = np.concatenate([batch, toll])
+    assigned_centroids_ciao = jnp.concatenate([assigned_centroids, alloccio])
+    toll = jnp.zeros((tot_to_add, batch.shape[1]))
+    batch_ciao = jnp.concatenate([batch, toll])
     yalla = assigned_centroids_ciao.argsort()
     yolla = batch_ciao[yalla].reshape(k, max_count, batch.shape[1])
     youla_lrs = (
-        np.concatenate((correct_lrs, np.zeros(max_count)[:, None]))[yalla]
+        jnp.concatenate((correct_lrs, jnp.zeros(max_count)[:, None]))[yalla]
         .flatten()
         .reshape(k, max_count)[:, :, None]
     )
@@ -95,29 +94,28 @@ def update_centroids_vectorized(v, centroids, assigned_centroids, batch, k):
 
 
 
-class MiniBatchKMeansOptimizer:
+class MiniBatchKMeans:
     def __init__(
         self,
-        xs: np.DeviceArray,
+        xs: jnp.DeviceArray | np.ndarray,
         k: int,
         *,
         batch_size: int = 1000,
-        n_init: int = 10,
         iter: int = 300,
         tol: float = 1e-4,
         random_state: int = 0,
     ):
-        self.batch_size = batch_size
-        self.xs = xs
-        self.k = k
-        self.n_init = n_init
-        self.iter = iter
+        self.batch_size: int= batch_size
+        self.xs:jnp.DeviceArray = jnp.array(xs)
+        self.k:int = k
+        self.iter:int = iter
         self.tol = tol
-        self.rn_key = jrn.PRNGKey(random_state)
+        self.rn_key:jnp.DeviceArray = jrn.PRNGKey(random_state)
+        self.centroids:Optional[DeviceArray] = None
 
     def fit(self):
         centroids = jrn.choice(self.rn_key, self.xs, shape=(self.k,))
-        vs = np.zeros(self.k)
+        vs = jnp.zeros(self.k)
         for i in range(self.iter):
             rn_key, subkey = jrn.split(self.rn_key)
             batch = jrn.choice(subkey, self.xs, shape=(self.batch_size,), replace=False)
@@ -133,9 +131,9 @@ class MiniBatchKMeansOptimizer:
 
 
 def main():
-    xs: np.DeviceArray = np.asarray(genfromtxt("clusteringData.csv", delimiter=","))
-    kmeans = MiniBatchKMeansOptimizer(
-        xs, k=4, batch_size=1000, iter=1000, random_state=random.randint(0, 1000)
+    xs: jnp.DeviceArray = jnp.asarray(genfromtxt("clusteringData.csv", delimiter=","))
+    kmeans = MiniBatchKMeans(
+        xs, k=4, batch_size=1000, iter=1000, random_state=0
     )
     kmeans.fit()
 
