@@ -1,6 +1,6 @@
 # Mini-Batch KMeans written in JAX
 
-Just-in-time compiled ⚡implementation of [Mini-Batch KMeans](https://doi.org/10.1145/1772690.1772862)[1]
+Just-in-time compiled, and accelerated ⚡ implementation of [Mini-Batch KMeans](https://doi.org/10.1145/1772690.1772862)[1]
 
 ## Requirements
 
